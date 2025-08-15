@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Go-Soacha 3D — San Mateo Interactivo</title>
+<style>
+  :root{
+    --bg:#0b1220; --ink:#e6fbff; --muted:#a8c8da;
+    --cyan:#00e5ff; --mag:#ff4dff; --lime:#76ff03; --amber:#ffc107;
+    --panel:#0e1629ea; --border:#1f2b46; --chip:#122041; --chipb:#2a3d63;
+  }
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 70% 20%,#14213a 0%,#0b1220 45%,#070b14 100%);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;overflow:hidden}
+  #scene{position:fixed;inset:0}
+  /* HUD */
+  .hud{position:fixed;inset:0;pointer-events:none}
+  .brand{position:fixed;top:16px;left:16px;background:#0d1424cc;border:1px solid var(--border);backdrop-filter:blur(6px);padding:10px 12px;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);pointer-events:auto}
+  .brand h1{margin:0;font-size:16px;letter-spacing:.4px;color:#b2faff}
+  .brand p{margin:3px 0 0;font-size:12px;color:var(--muted)}
+
+  .toolbar{position:fixed;left:16px;bottom:16px;display:flex;gap:10px;flex-wrap:wrap;pointer-events:auto}
+  .btn{border:1px solid var(--border);background:#0d1424cc;color:#cfe7ff;border-radius:12px;padding:10px 12px;font-weight:700;cursor:pointer}
+  .btn:hover{filter:brightness(1.12)}
+
+  .panel{position:fixed;right:16px;top:16px;width:min(400px,92vw);max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:0 10px 40px rgba(0,0,0,.35);pointer-events:auto}
+  .panel h3{margin:4px 0 8px;font-size:20px;color:#d9f9ff}
+  .panel .txt{font-size:13px;color:#cfe7ff;line-height:1.5}
+  .panel .grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px}
+  .panel img{width:100%;height:200px;object-fit:cover;border-radius:10px;border:1px solid #203356;background:#0a1428}
+  .panel .tags{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+  .tag{font-size:11px;border:1px solid var(--chipb);color:#bfeaff;background:var(--chip);padding:4px 8px;border-radius:999px}
+  .panel a.link{display:inline-block;margin-top:8px;padding:10px 12px;border-radius:10px;background:linear-gradient(90deg,var(--cyan),#2cff88);text-decoration:none;color:#001018;font-weight:800}
+
+  /* Tooltip CSS2D */
+  .bubble{
+    background: radial-gradient(120px 90px at 30% 30%, rgba(255,255,255,.95), rgba(187,243,255,.85) 40%, rgba(163,228,255,.40) 70%, rgba(100,200,255,.18) 100%);
+    border:1px solid rgba(120,200,255,.8); color:#01212a; padding:8px 10px; border-radius:999px; font-weight:800; font-size:12px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25), inset 0 0 30px rgba(255,255,255,.35);
+    transform:translate(-50%,-180%); white-space:nowrap; pointer-events:none; text-shadow:0 1px 0 rgba(255,255,255,.3)
+  }
+  /* Modal mapa completo */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:5}
+  .mapmodal{width:min(1000px,92vw);height:min(700px,82vh);background:#0c1426;border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 44px rgba(0,0,0,.5);overflow:hidden}
+  .mapmodal header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
+  .close{cursor:pointer;border:1px solid var(--border);background:#0d1424cc;color:#cfe7ff;border-radius:10px;padding:6px 10px;font-weight:700}
+  .mapwrap{height:calc(100% - 50px)}
+  .mapwrap iframe{border:0;width:100%;height:100%}
+
+  @media (max-width:720px){ .panel img{height:160px} }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<div class="hud">
+  <div class="brand">
+    <h1>Go-Soacha 3D — San Mateo</h1>
+    <p>Proyecto por <b>Santiago Romero</b> & <b>Luis Montealgre</b> · <b>Go-Soacha</b></p>
+  </div>
+
+  <div class="toolbar">
+    <button id="btnReset" class="btn">🎯 Vista inicial</button>
+    <button id="btnOverview" class="btn">🗺️ Mapa completo</button>
+    <button id="btnMute" class="btn">🔊 Sonido: ON</button>
+  </div>
+
+  <div class="panel" id="panel">
+    <h3>Explora San Mateo en 3D</h3>
+    <div class="txt">Arrastra para rotar • Rueda para acercar/alejar • Pasa el mouse por las burbujas • Haz click para ver información y abrir el lugar en Maps. Colores vivos / estilo caricatura para la feria ✨</div>
+    <div class="grid">
+      <img id="foto" alt="Foto del sitio" src="https://upload.wikimedia.org/wikipedia/commons/9/98/Salto_del_Tequendama_%28Cundinamarca_-_Colombia%29.jpg" />
+      <div class="txt" id="detalles"></div>
+      <div class="tags" id="tags"></div>
+      <a class="link" id="openLink" target="_blank" rel="noopener">Abrir en Google Maps</a>
+    </div>
+  </div>
+</div>
+
+<!-- Overlay del mapa completo -->
+<div class="overlay" id="overlay">
+  <div class="mapmodal">
+    <header>
+      <div><b>San Mateo / Soacha — Vista general</b></div>
+      <button class="close" id="btnCloseOverlay">✖ Cerrar</button>
+    </header>
+    <div class="mapwrap">
+      <!-- Mapa embebido centrado en San Mateo -->
+      <iframe loading="lazy" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d993.6166903186175!2d-74.217!3d4.5807!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8e3f75f0b9a7c7cf%3A0x8f1e9821e2c4f6e2!2sSan%20Mateo%2C%20Soacha!5e0!3m2!1ses!2sCO!4v1699999999999"></iframe>
+    </div>
+  </div>
+</div>
+
+<noscript>
+  <h2>Necesitas activar JavaScript</h2>
+  <p>Esta experiencia usa WebGL/Three.js. Activa JavaScript o abre el archivo en un navegador moderno.</p>
+</noscript>
+
+<!-- Three.js desde CDN -->
+<script type="module">
+import * as THREE from "https://unpkg.com/three@0.158.0/build/three.module.js";
+import { OrbitControls } from "https://unpkg.com/three@0.158.0/examples/jsm/controls/OrbitControls.js";
+import { CSS2DRenderer, CSS2DObject } from "https://unpkg.com/three@0.158.0/examples/jsm/renderers/CSS2DRenderer.js";
+
+/* -------------- Datos de sitios -------------- */
+const sitios = [
+  { id:"sanmateo", nombre:"Estación San Mateo (Transporte)", cat:["Transporte","Conexión Bogotá"],
+    desc:"Estación troncal que conecta Soacha con Bogotá por la Autopista Sur.",
+    donde:"Sector San Mateo, Autopista Sur.", como:"Acceso peatonal y rutas alimentadoras.", cuando:"Operación diaria (consulta horarios).",
+    url:"https://www.google.com/maps/search/?api=1&query=Estaci%C3%B3n+San+Mateo+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/0/0a/Estaci%C3%B3n_San_Mateo.jpg",
+    pos:[ 6,  2,  4] },
+  { id:"plaza", nombre:"Plaza Principal de Soacha", cat:["Plaza","Cívico"],
+    desc:"Plaza cívica central para eventos, encuentro comunitario y descanso.",
+    donde:"Soacha centro (cerca de San Mateo).", como:"Bus urbano o caminando desde rutas principales.", cuando:"Abierta 24/7; eventos en fechas especiales.",
+    url:"https://www.google.com/maps/search/?api=1&query=Plaza+Principal+de+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/0/0e/Plaza_Principal_de_Soacha_-_Soacha%C2%B4s_Central_Square.jpg",
+    pos:[-4,  1, -7] },
+  { id:"unisur", nombre:"Centro Comercial Unisur", cat:["Compras","Cine"],
+    desc:"Centro comercial tradicional con tiendas, comidas y servicios.",
+    donde:"Cra. 4 con Calle 28, sector San Mateo.", como:"A pie desde San Mateo o bus urbano.", cuando:"Todos los días 10:00–20:00 aprox.",
+    url:"https://www.google.com/maps/search/?api=1&query=Centro+Comercial+Unisur+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/6/6e/Shopping_mall_interior.jpg",
+    pos:[-8,  3,  2] },
+  { id:"ventura", nombre:"Centro Comercial Ventura Terreros", cat:["Compras","Entretenimiento"],
+    desc:"Centro comercial moderno con moda, comida y actividades familiares.",
+    donde:"Autopista Sur con Av. Terreros.", como:"Buses por Autopista Sur; a pie desde barrios cercanos.", cuando:"Horarios comerciales típicos.",
+    url:"https://www.google.com/maps/search/?api=1&query=Ventura+Terreros+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/8/8e/Shopping_Center_Inside.jpg",
+    pos:[-2,  6,  7] },
+  { id:"parroquia", nombre:"Parroquia Apóstol San Mateo", cat:["Iglesia","Comunidad"],
+    desc:"Templo católico del barrio con eucaristías y actividades.",
+    donde:"Cra. 6A Este, San Mateo.", como:"A pie desde el parque y zonas residenciales.", cuando:"Misas según agenda parroquial.",
+    url:"https://www.google.com/maps/search/?api=1&query=Parroquia+Ap%C3%B3stol+San+Mateo+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/1/10/Church_interior_generic.jpg",
+    pos:[ 5,  6, -6] },
+  { id:"hospital", nombre:"Hospital Cardiovascular del Niño", cat:["Salud","Especializado"],
+    desc:"Centro especializado en pediatría cardiovascular.",
+    donde:"Soacha (sector oriental).", como:"Bus urbano o vehículo particular.", cuando:"Urgencias 24/7; otros servicios con cita.",
+    url:"https://www.google.com/maps/search/?api=1&query=Hospital+Cardiovascular+del+Ni%C3%B1o+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/6/64/Hospital_sign_%28example%29.jpg",
+    pos:[ 9,  1, -1] },
+  { id:"cultura", nombre:"Casa de la Cultura de Soacha", cat:["Cultura","Formación"],
+    desc:"Espacio para artes, música, danza y teatro.",
+    donde:"Cra. 7 #14-72, Soacha centro.", como:"Bus urbano centro–San Mateo o a pie.", cuando:"Programación por temporadas.",
+    url:"https://www.google.com/maps/search/?api=1&query=Casa+de+la+Cultura+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/8/8b/Community_centre_hall.jpg",
+    pos:[ 1,  4,  9] },
+  { id:"paseo", nombre:"Paseo Comercial San Mateo", cat:["Comercio","Barrio"],
+    desc:"Zona de locales y pasajes comerciales del sector.",
+    donde:"Alrededores del parque de San Mateo.", como:"A pie; muy cercano a vías principales.", cuando:"Horario comercial (9:00–19:00 aprox.)",
+    url:"https://www.google.com/maps/search/?api=1&query=San+Mateo+Soacha+comercio",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/0/0e/Market_stalls_generic.jpg",
+    pos:[-6,  5,  5] },
+  { id:"skate", nombre:"Pista de Skate — San Mateo", cat:["Deporte","Juventud"],
+    desc:"Espacio usado por skaters y patinadores del barrio.",
+    donde:"Cerca de zonas deportivas de San Mateo.", como:"A pie o en bici; lleva protecciones.", cuando:"Mejor en horarios diurnos.",
+    url:"https://www.google.com/maps/search/?api=1&query=Skate+San+Mateo+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/1/18/Skatepark_generic.jpg",
+    pos:[ 7,  3, -4] },
+  { id:"salto", nombre:"Salto del Tequendama & Casa Museo", cat:["Naturaleza","Historia"],
+    desc:"Cascada emblemática y museo (antiguo Hotel del Salto).",
+    donde:"Zona rural de Soacha (ruta al Tequendama).", como:"Transporte intermunicipal o vehículo.", cuando:"Fines de semana usualmente abierto.",
+    url:"https://www.google.com/maps/search/?api=1&query=Salto+del+Tequendama+Casa+Museo",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/9/98/Salto_del_Tequendama_%28Cundinamarca_-_Colombia%29.jpg",
+    pos:[-3,  8, -2] },
+  { id:"chicaque", nombre:"Parque Natural Chicaque", cat:["Naturaleza","Senderismo"],
+    desc:"Reserva de bosque de niebla con senderos y miradores.",
+    donde:"Límite Soacha–San Antonio del Tequendama.", como:"Transporte a la entrada y caminata señalizada.", cuando:"Diario; reserva recomendada.",
+    url:"https://www.google.com/maps/search/?api=1&query=Parque+Natural+Chicaque",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/9/97/Parque_Natural_Chicaque.jpg",
+    pos:[ 0,  9,  0] },
+  { id:"mapa5", nombre:"Mapa — Comuna 5 San Mateo", cat:["Referencia","Ubicación"],
+    desc:"Mapa de la comuna para ubicar barrios y vías.",
+    donde:"San Mateo, Soacha.", como:"Úsalo como guía junto a Google Maps.", cuando:"Útil para planear rutas.",
+    url:"https://www.google.com/maps/search/?api=1&query=San+Mateo+Soacha",
+    foto:"https://upload.wikimedia.org/wikipedia/commons/0/0b/Comuna_5_San_Mateo.png",
+    pos:[ 2,  2, -9] }
+];
+
+/* -------------- Escena básica -------------- */
+const container = document.getElementById("scene");
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:"high-performance" });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+container.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(innerWidth, innerHeight);
+labelRenderer.domElement.style.position = "fixed";
+labelRenderer.domElement.style.top = "0";
+labelRenderer.domElement.style.pointerEvents = "none";
+container.appendChild(labelRenderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1220);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000);
+const CAM_INIT = new THREE.Vector3(0, 3, 16);
+camera.position.copy(CAM_INIT);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.minDistance = 6; controls.maxDistance = 40;
+
+/* -------------- Iluminación -------------- */
+const light1 = new THREE.PointLight(0x66ffff, 1.2, 100); light1.position.set(6,8,6);
+const light2 = new THREE.PointLight(0xff66ff, 0.9, 100); light2.position.set(-6,-4,-4);
+const amb = new THREE.AmbientLight(0x88aaff, .25);
+scene.add(light1, light2, amb);
+
+/* -------------- Mundo caricaturesco -------------- */
+// Núcleo brillante
+const coreGeo = new THREE.IcosahedronGeometry(3.6, 2);
+const coreMat = new THREE.MeshPhysicalMaterial({ color:0x22ffe6, transmission:.92, thickness:.8, roughness:.12, metalness:.05, emissive:0x0aaab2, emissiveIntensity:.35, clearcoat:.6, clearcoatRoughness:.2 });
+const core = new THREE.Mesh(coreGeo, coreMat); scene.add(core);
+// Halo
+const haloGeo = new THREE.SphereGeometry(4.6, 64, 64);
+const haloMat = new THREE.MeshBasicMaterial({ color:0x33ffee, transparent:true, opacity:.12, depthWrite:false });
+const halo = new THREE.Mesh(haloGeo, haloMat); scene.add(halo);
+// Anillos decorativos
+const rings = new THREE.Group();
+for(let i=0;i<3;i++){
+  const g = new THREE.TorusGeometry(5.2+i*0.4, 0.02+i*0.01, 16, 128);
+  const m = new THREE.MeshBasicMaterial({ color:[0x00e5ff,0xff4dff,0x76ff03][i], transparent:true, opacity:.6 });
+  const t = new THREE.Mesh(g, m); t.rotation.x = (i*0.5)+0.6; t.rotation.z = i*0.7; rings.add(t);
+}
+scene.add(rings);
+// Partículas
+const stars = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ size:0.05, transparent:true, opacity:.85 }));
+const starCount = 2500; const starPos = new Float32Array(starCount*3);
+for(let i=0;i<starCount;i++){ const r=80*Math.cbrt(Math.random()); const phi=Math.random()*Math.PI*2; const cost=Math.random()*2-1; const sint=Math.sqrt(1-cost*cost); starPos[i*3]=r*sint*Math.cos(phi); starPos[i*3+1]=r*cost; starPos[i*3+2]=r*sint*Math.sin(phi);} 
+stars.geometry.setAttribute("position", new THREE.BufferAttribute(starPos,3)); scene.add(stars);
+
+/* -------------- Hotspots -------------- */
+const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+const interactivos = []; let hovered = null; let selected = null;
+
+// Material aura shader
+const bubbleMat = new THREE.ShaderMaterial({
+  uniforms:{ uTime:{value:0}, uHue:{value:0.0} },
+  vertexShader:`varying vec3 vPos; void main(){ vPos=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader:`uniform float uTime; uniform float uHue; varying vec3 vPos; 
+  vec3 h2rgb(float h){ h=fract(h); float r=abs(h*6.-3.)-1.; float g=2.-abs(h*6.-2.); float b=2.-abs(h*6.-4.); return clamp(vec3(r,g,b),0.,1.); }
+  void main(){ float r=length(vPos.xy); float ring=smoothstep(.98,.8,1.-r); float pulse=.2*sin(uTime*3.0+length(vPos))+.9; vec3 col=h2rgb(uHue)*1.2; gl_FragColor=vec4(col*pulse, ring); }`,
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending
+});
+
+const group = new THREE.Group(); scene.add(group);
+
+sitios.forEach((s,i)=>{
+  // esfera
+  const geo = new THREE.SphereGeometry(.52, 32, 32);
+  const color = new THREE.Color().setHSL((i/sitios.length), .7, .6);
+  const mat = new THREE.MeshStandardMaterial({ color, emissive:0x001920, emissiveIntensity:.6, metalness:.7, roughness:.2 });
+  const m = new THREE.Mesh(geo, mat); m.position.set(...s.pos); m.userData={...s, idx:i};
+  // aura
+  const aura = new THREE.Mesh(new THREE.SphereGeometry(.95, 32,32), bubbleMat.clone());
+  aura.position.copy(m.position); aura.material.uniforms.uHue.value = (i/sitios.length);
+  // etiqueta
+  const div=document.createElement('div'); div.className='bubble'; div.textContent=s.nombre; const label=new CSS2DObject(div); label.position.set(0,1.1,0); m.add(label); label.visible=false;
+  group.add(m,aura); interactivos.push(m);
+});
+
+/* -------------- Sonidos (WebAudio, sin archivos) -------------- */
+const audio={ ctx:null, muted:false, ensure(){ if(this.ctx) return; this.ctx = new (window.AudioContext||window.webkitAudioContext)(); },
+  beep(f=880,d=.06,g=.06){ if(this.muted) return; this.ensure(); const t=this.ctx.currentTime; const o=this.ctx.createOscillator(); const q=this.ctx.createGain(); o.type='sine'; o.frequency.value=f; q.gain.setValueAtTime(0,t); q.gain.linearRampToValueAtTime(g,t+.01); q.gain.exponentialRampToValueAtTime(0.0001,t+d); o.connect(q).connect(this.ctx.destination); o.start(t); o.stop(t+d); },
+  ambience(){ if(this.muted) return; this.ensure(); if(this._amb) return; const t=this.ctx; const o=t.createOscillator(); const g=t.createGain(); const f=t.createBiquadFilter(); o.type='triangle'; o.frequency.value=140; f.type='lowpass'; f.frequency.value=600; g.gain.value=0.02; o.connect(f).connect(g).connect(t.destination); o.start(); this._amb={o,g}; },
+  stopAmb(){ if(this._amb){ this._amb.o.stop(); this._amb=null; } }
+};
+
+/* -------------- UI Panel -------------- */
+const panel = document.getElementById('panel');
+const foto = document.getElementById('foto');
+const det  = document.getElementById('detalles');
+const tags = document.getElementById('tags');
+const openLink = document.getElementById('openLink');
+
+function setPanel(data){
+  panel.querySelector('h3').textContent = data.nombre;
+  foto.src = data.foto;
+  det.innerHTML = `<b>Qué es:</b> ${data.desc}<br><b>Dónde:</b> ${data.donde}<br><b>Cómo:</b> ${data.como}<br><b>Cuándo:</b> ${data.cuando}`;
+  tags.innerHTML = data.cat.map(c=>`<span class="tag">${c}</span>`).join('');
+  openLink.href = data.url; openLink.style.display='inline-block';
+}
+function resetPanel(){
+  panel.querySelector('h3').textContent = 'Explora San Mateo en 3D';
+  foto.src = 'https://upload.wikimedia.org/wikipedia/commons/9/98/Salto_del_Tequendama_%28Cundinamarca_-_Colombia%29.jpg';
+  det.textContent = 'Acércate a las burbujas para ver el nombre del sitio. Haz click para ver más info y abrir el lugar en Maps.';
+  tags.innerHTML = ''; openLink.style.display='none';
+}
+resetPanel();
+
+/* -------------- Interacción -------------- */
+addEventListener('mousemove', (e)=>{ mouse.x = (e.clientX/innerWidth)*2-1; mouse.y = -(e.clientY/innerHeight)*2+1; });
+addEventListener('click', ()=>{ if(!hovered) return; selectHotspot(hovered); audio.beep(520,.08,.08); });
+
+function selectHotspot(obj){ selected = obj; setPanel(obj.userData); flyTo(obj.position.clone().add(new THREE.Vector3(0,0,3)), obj.position); }
+
+function testHover(){ raycaster.setFromCamera(mouse, camera); const hit=raycaster.intersectObjects(interactivos,false)[0]?.object||null; if(hit!==hovered){ if(hovered){ hovered.children.forEach(ch=>{ if(ch instanceof CSS2DObject) ch.visible=false; }); }
+  hovered=hit; if(hovered){ hovered.children.forEach(ch=>{ if(ch instanceof CSS2DObject) ch.visible=true; }); audio.beep(880,.04,.04); } }
+}
+
+/* -------------- Animación cámara -------------- */
+function flyTo(camPos, lookAt){
+  const from = camera.position.clone();
+  const to = camPos.clone();
+  const laFrom = new THREE.Vector3(); camera.getWorldDirection(laFrom); laFrom.add(camera.position);
+  const laTo = lookAt.clone();
+  let t=0; const dur=0.9; const start=performance.now();
+  (function anim(){ const now=performance.now(); t=Math.min(1,(now-start)/ (dur*1000)); const k = t<.5 ? 2*t*t : -1+(4-2*t)*t; // easeInOut
+    camera.position.lerpVectors(from,to,k); const look = laFrom.clone().lerp(laTo,k); camera.lookAt(look); renderer.render(scene,camera); labelRenderer.render(scene,camera);
+    if(t<1) requestAnimationFrame(anim); })();
+}
+
+/* -------------- Botones -------------- */
+const btnMute = document.getElementById('btnMute');
+btnMute.onclick = ()=>{ audio.muted = !audio.muted; btnMute.textContent = audio.muted? '🔇 Sonido: OFF' : '🔊 Sonido: ON'; if(!audio.muted) audio.ambience(); };
+
+const btnReset = document.getElementById('btnReset');
+btnReset.onclick = ()=>{ flyTo(CAM_INIT, new THREE.Vector3(0,0,0)); resetPanel(); };
+
+const overlay = document.getElementById('overlay');
+const btnOverview = document.getElementById('btnOverview');
+const btnCloseOverlay = document.getElementById('btnCloseOverlay');
+btnOverview.onclick = ()=>{ overlay.style.display='flex'; };
+btnCloseOverlay.onclick = ()=>{ overlay.style.display='none'; };
+
+/* -------------- Loop de animación -------------- */
+let t0=performance.now();
+function animate(now){ const dt=(now-t0)/1000; t0=now; controls.update(); halo.rotation.y += dt*0.06; core.rotation.y -= dt*0.04; rings.rotation.y += dt*0.03; stars.rotation.y += dt*0.004; group.children.forEach((o)=>{ if(o.material&&o.material.uniforms&&o.material.uniforms.uTime){ o.material.uniforms.uTime.value += dt; } }); testHover(); renderer.render(scene,camera); labelRenderer.render(scene,camera); requestAnimationFrame(animate);} requestAnimationFrame(animate);
+
+/* -------------- Resize -------------- */
+addEventListener('resize', ()=>{ camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); labelRenderer.setSize(innerWidth, innerHeight); });
+
+// Inicia ambiente si está ON
+audio.ambience();
+</script>
+</body>
+</html>
